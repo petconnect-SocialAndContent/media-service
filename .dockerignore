@@ -10,3 +10,4 @@ Dockerfile
 .DS_Store
 logs
 coverage
+Dockerfile

@@ -1,11 +1,26 @@
+# Etapa 1: Build con dependencias de producción
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copiar package.json y lock
+COPY package*.json ./
+
+# Instalar solo dependencias necesarias
+RUN npm install --only=production
+
+# Copiar el resto del código fuente
+COPY . .
+
+# Etapa 2: Imagen final liviana
 FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY --from=builder /app /app
 
-RUN npm install
+# Expón el puerto si usas Express (puedes cambiarlo si usas otro)
+EXPOSE 3008
 
-COPY ./src ./src
+CMD ["node", "src/app.js"]
 
-CMD ["npm", "start"]
