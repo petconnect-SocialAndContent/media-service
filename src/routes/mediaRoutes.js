@@ -1,24 +1,20 @@
 const express = require('express');
 const multer = require('multer');
-const s3 = require('../services/s3Service.js');
-const Media = require('../models/Media.js');
-const authMiddleware = require('../middleware/authMiddleware.js'); // auth básico
+const s3 = require('../services/s3Service');
+const Media = require('../models/Media');
+const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// Validaciones: tipos y tamaño (ejemplo: máx 5MB y solo imágenes)
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif'];
-const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
+const MAX_SIZE = 5 * 1024 * 1024;
 
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: MAX_SIZE },
     fileFilter: (req, file, cb) => {
-        if (ALLOWED_TYPES.includes(file.mimetype)) {
-            cb(null, true);
-        } else {
-            cb(new Error('Invalid file type.'));
-        }
+        if (ALLOWED_TYPES.includes(file.mimetype)) cb(null, true);
+        else cb(new Error('Tipo de archivo no permitido'));
     }
 });
 
@@ -41,7 +37,7 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
             url: s3Response.Location,
             contentType: file.mimetype,
             size: file.size,
-            uploadedBy: req.body.userId || 'unknown'
+            uploadedBy: req.user?.id || 'unknown'
         });
 
         await media.save();
@@ -49,7 +45,7 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
         res.json({ success: true, media });
     } catch (err) {
         console.error('Upload error:', err);
-        res.status(500).json({ error: 'Failed to upload', message: err.message });
+        res.status(500).json({ error: 'Fallo en la subida', message: err.message });
     }
 });
 
@@ -57,17 +53,15 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
 router.get('/:id', authMiddleware, async (req, res) => {
     try {
         const media = await Media.findById(req.params.id);
-        if (!media) {
-            return res.status(404).json({ error: 'Media not found' });
-        }
+        if (!media) return res.status(404).json({ error: 'Media no encontrada' });
         res.json(media);
     } catch (err) {
         console.error('Fetch error:', err);
-        res.status(500).json({ error: 'Failed to fetch media' });
+        res.status(500).json({ error: 'Fallo al obtener media' });
     }
 });
 
-// LISTAR paginado
+// LISTAR
 router.get('/', authMiddleware, async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
@@ -89,33 +83,27 @@ router.get('/', authMiddleware, async (req, res) => {
         });
     } catch (err) {
         console.error('List error:', err);
-        res.status(500).json({ error: 'Failed to list media' });
+        res.status(500).json({ error: 'Fallo al listar' });
     }
 });
 
-// BORRAR por ID
+// DELETE
 router.delete('/:id', authMiddleware, async (req, res) => {
     try {
         const media = await Media.findById(req.params.id);
-        if (!media) {
-            return res.status(404).json({ error: 'Media not found' });
-        }
+        if (!media) return res.status(404).json({ error: 'Media no encontrada' });
 
-        // borrar en S3
-        const s3Params = {
+        await s3.deleteObject({
             Bucket: process.env.AWS_S3_BUCKET_NAME,
             Key: media.url.split('/').pop()
-        };
+        }).promise();
 
-        await s3.deleteObject(s3Params).promise();
-
-        // borrar en Mongo
         await Media.deleteOne({ _id: req.params.id });
 
-        res.json({ success: true, message: 'Media deleted' });
+        res.json({ success: true, message: 'Media eliminada' });
     } catch (err) {
         console.error('Delete error:', err);
-        res.status(500).json({ error: 'Failed to delete media' });
+        res.status(500).json({ error: 'Fallo al eliminar' });
     }
 });
 

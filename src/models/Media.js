@@ -6,7 +6,7 @@ const MediaSchema = new mongoose.Schema({
     contentType: String,
     size: Number,
     uploadedAt: { type: Date, default: Date.now },
-    uploadedBy: String // userId que subió el archivo
-});
+    uploadedBy: String
+}, { timestamps: true });
 
 module.exports = mongoose.model('Media', MediaSchema);
